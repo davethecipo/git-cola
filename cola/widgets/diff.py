@@ -47,6 +47,8 @@ class DiffSyntaxHighlighter(QtGui.QSyntaxHighlighter):
     DIFF_HUNK_HEADER_RGX = re.compile(r'(?:@@ -[0-9,]+ \+[0-9,]+ @@)|'
                                       r'(?:@@@ (?:-[0-9,]+ ){2}\+[0-9,]+ @@@)')
     BAD_WHITESPACE_RGX = re.compile(r'\s+$')
+    WORD_DIFF_ADD_RGX = re.compile(r'\{\+\w+.*\+\}')
+    WORD_DIFF_DEL_RGX = re.compile(r'\[-\w+.*-\]')
 
     def __init__(self, doc, whitespace=True, is_commit=False):
         QtGui.QSyntaxHighlighter.__init__(self, doc)
@@ -64,6 +66,8 @@ class DiffSyntaxHighlighter(QtGui.QSyntaxHighlighter):
         self.color_add = RGB(cfg.color('add', 'd2ffe4'))
         self.color_remove = RGB(cfg.color('remove', 'fee0e4'))
         self.color_header = RGB(cfg.color('header', header))
+        self.color_diff_word_add = RGB(cfg.color('diff_word_add', '24d430'))
+        self.color_diff_word_remove = RGB(cfg.color('diff_word_remove', 'ff4f67'))
 
         self.diff_header_fmt = make_format(fg=self.color_header)
         self.bold_diff_header_fmt = make_format(fg=self.color_header, bold=True)
@@ -73,6 +77,9 @@ class DiffSyntaxHighlighter(QtGui.QSyntaxHighlighter):
         self.diff_remove_fmt = make_format(fg=self.color_text,
                                            bg=self.color_remove)
         self.bad_whitespace_fmt = make_format(bg=Qt.red)
+        self.diff_color_word_add_fmt = make_format(fg=self.color_text,
+                                                   bg=self.color_diff_word_add)
+        self.diff_color_word_del_fmt = make_format(fg=self.color_text,                                                               bg=self.color_diff_word_remove)
         self.setCurrentBlockState(self.INITIAL_STATE)
 
     def set_enabled(self, enabled):
@@ -128,7 +135,18 @@ class DiffSyntaxHighlighter(QtGui.QSyntaxHighlighter):
                         i = m.start()
                         self.setFormat(i, len(text) - i,
                                        self.bad_whitespace_fmt)
-
+            diff_porcelain_add = self.WORD_DIFF_ADD_RGX.finditer(text)
+            if diff_porcelain_add:
+                for chunk in diff_porcelain_add:
+                    start, end = chunk.span()
+                    self.setFormat(start, end-start,
+                                   self.diff_color_word_add_fmt)
+            diff_porcelain_del = self.WORD_DIFF_DEL_RGX.finditer(text)
+            if diff_porcelain_del:
+                for chunk in diff_porcelain_del:
+                    start, end = chunk.span()
+                    self.setFormat(start, end - start,
+                                   self.diff_color_word_del_fmt)
         self.setCurrentBlockState(state)
 
 
@@ -355,6 +373,11 @@ class DiffEditor(DiffTextEdit):
             self._update_diff_opts)
         self.diff_function_context_action.setCheckable(True)
 
+        self.diff_word_format_action = add_action(
+            self, N_('Use --color-words format'),
+            self._update_diff_opts)
+        self.diff_word_format_action.setCheckable(True)
+
         self.diff_show_line_numbers = add_action(
             self, N_('Show lines numbers'),
             self._update_diff_opts)
@@ -370,6 +393,7 @@ class DiffEditor(DiffTextEdit):
         self.diffopts_menu.addAction(self.diff_ignore_all_space_action)
         self.diffopts_menu.addAction(self.diff_show_line_numbers)
         self.diffopts_menu.addAction(self.diff_function_context_action)
+        self.diffopts_menu.addAction(self.diff_word_format_action)
         self.diffopts_button.setMenu(self.diffopts_menu)
         qtutils.hide_button_menu_indicator(self.diffopts_button)
 
@@ -424,12 +448,14 @@ class DiffEditor(DiffTextEdit):
         space_change = self.diff_ignore_space_change_action.isChecked()
         all_space = self.diff_ignore_all_space_action.isChecked()
         function_context = self.diff_function_context_action.isChecked()
+        word_format = self.diff_word_format_action.isChecked()
         self.numbers.setVisible(self.show_line_numbers())
 
         gitcmds.update_diff_overrides(space_at_eol,
                                       space_change,
                                       all_space,
-                                      function_context)
+                                      function_context,
+                                      word_format)
         self.options_changed.emit()
 
     # Qt overrides

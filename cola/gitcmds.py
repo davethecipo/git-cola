@@ -280,11 +280,13 @@ _diff_overrides = {}
 
 
 def update_diff_overrides(space_at_eol, space_change,
-                          all_space, function_context):
+                          all_space, function_context,
+                          word_diff):
     _diff_overrides['ignore_space_at_eol'] = space_at_eol
     _diff_overrides['ignore_space_change'] = space_change
     _diff_overrides['ignore_all_space'] = all_space
     _diff_overrides['function_context'] = function_context
+    _diff_overrides['word_diff'] = word_diff
 
 
 def common_diff_opts(config=None):
@@ -298,6 +300,7 @@ def common_diff_opts(config=None):
         'no_ext_diff': True,
         'unified': config.get('gui.diffcontext', 3),
         '_raw': True,
+        'word_diff': 'porcelain',
     }
     opts.update(_diff_overrides)
     return opts
